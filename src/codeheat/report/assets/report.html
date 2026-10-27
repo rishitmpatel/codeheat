@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{TITLE}}</title>
+<style>
+/*{{CSS}}*/
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="wrap top-in">
+      <a class="brand" href="#top"><span class="flame" aria-hidden="true"></span>codeheat</a>
+      <nav id="nav">
+        <a href="#map">Map</a><a href="#findings">Findings</a><a href="#hotspots">Hotspots</a><a href="#trends">Trends</a><a href="#coupling">Coupling</a><a href="#knowledge">Knowledge</a><a href="#method">Method</a>
+      </nav>
+      <button id="theme" class="icon-btn" title="Toggle light / dark" aria-label="Toggle colour theme"></button>
+    </div>
+  </header>
+  <main id="top"></main>
+</div>
+<noscript><p style="padding:2rem">This report needs JavaScript to render. The same data is in the JSON block below.</p></noscript>
+<script id="data" type="application/json">{{DATA}}</script>
+<script>
+/*{{JS}}*/
+</script>
+</body>
+</html>

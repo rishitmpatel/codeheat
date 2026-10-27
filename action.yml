@@ -1,0 +1,111 @@
+name: codeheat
+description: Behavioural code analysis (hotspots, change coupling, knowledge risk, complexity trends) with an HTML report and a job summary.
+author: codeheat
+branding:
+  icon: activity
+  color: orange
+
+inputs:
+  path:
+    description: Repository path to analyse.
+    default: "."
+  since:
+    description: Start of the analysis window (YYYY-MM-DD or "12 months ago").
+    default: "12 months ago"
+  until:
+    description: End of the window (default now).
+    default: ""
+  branch:
+    description: Branch or ref to analyse (default HEAD).
+    default: ""
+  exclude:
+    description: Newline-separated gitignore-style globs to skip.
+    default: ""
+  fail-on:
+    description: 'Newline-separated CI gates, e.g. "hotspot>0.9" or "ccn>30". The step fails if any is violated.'
+    default: ""
+  extra-args:
+    description: Extra command-line arguments passed to codeheat.
+    default: ""
+  report-name:
+    description: Name of the uploaded HTML report artifact.
+    default: codeheat-report
+  python-version:
+    description: Python version to use.
+    default: "3.12"
+  install-from:
+    description: 'What to pip install. Default installs codeheat from this action''s repository checkout.'
+    default: ""
+
+outputs:
+  html-report:
+    description: Path of the generated HTML report.
+    value: ${{ steps.run.outputs.html }}
+  json-report:
+    description: Path of the generated JSON report.
+    value: ${{ steps.run.outputs.json }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install codeheat
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip >/dev/null
+        if [ -n "${{ inputs.install-from }}" ]; then
+          python -m pip install "${{ inputs.install-from }}"
+        else
+          python -m pip install "${{ github.action_path }}"
+        fi
+
+    - name: Check history depth
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      run: |
+        if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+          echo "::warning title=codeheat::Shallow clone detected. Use 'actions/checkout' with 'fetch-depth: 0' for meaningful history analysis."
+        fi
+
+    - name: Run codeheat
+      id: run
+      shell: bash
+      env:
+        CH_PATH: ${{ inputs.path }}
+        CH_SINCE: ${{ inputs.since }}
+        CH_UNTIL: ${{ inputs.until }}
+        CH_BRANCH: ${{ inputs.branch }}
+        CH_EXCLUDE: ${{ inputs.exclude }}
+        CH_FAIL_ON: ${{ inputs.fail-on }}
+        CH_EXTRA: ${{ inputs.extra-args }}
+      run: |
+        out="${RUNNER_TEMP:-/tmp}/codeheat"
+        mkdir -p "$out"
+        args=("$CH_PATH" --since "$CH_SINCE" -q --html "$out/report.html" --json "$out/report.json" --markdown "$out/summary.md")
+        [ -n "$CH_UNTIL" ] && args+=(--until "$CH_UNTIL")
+        [ -n "$CH_BRANCH" ] && args+=(--branch "$CH_BRANCH")
+        while IFS= read -r g; do [ -n "$g" ] && args+=(--exclude "$g"); done <<< "$CH_EXCLUDE"
+        while IFS= read -r g; do [ -n "$g" ] && args+=(--fail-on "$g"); done <<< "$CH_FAIL_ON"
+        # shellcheck disable=SC2206
+        [ -n "$CH_EXTRA" ] && args+=($CH_EXTRA)
+        echo "html=$out/report.html" >> "$GITHUB_OUTPUT"
+        echo "json=$out/report.json" >> "$GITHUB_OUTPUT"
+        status=0
+        codeheat "${args[@]}" || status=$?
+        if [ -f "$out/summary.md" ]; then
+          cat "$out/summary.md" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        exit $status
+
+    - name: Upload HTML report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.report-name }}
+        path: |
+          ${{ runner.temp }}/codeheat/report.html
+          ${{ runner.temp }}/codeheat/report.json
+        if-no-files-found: ignore
